@@ -5,12 +5,14 @@ import os
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 from pyspark.sql import DataFrame
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, FloatType, dat
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, FloatType
 from pyspark.sql.functions import udf, col, to_date
+import pyspark.sql.functions as F
 import time
 
 def download_csv(url: str, filename: str) -> str:
 
+    print("Downloading", filename)
     response = requests.get(url)
     if response.status_code == 200:
         with open(filename, "wb") as f:
@@ -78,23 +80,43 @@ def main():
     url = os.getenv("BUSINESSOWNERSCSVURL")
     url1 = os.getenv("BUSINESSLICENSECSVURL")
     
-    filename = download_csv(url, "business_owners.csv")
-    filename1 = download_csv(url1, "business_licenses.csv")
+    owners = download_csv(url, "business_owners.csv")
+    licenses = download_csv(url1, "business_licenses.csv")
 
     spark = SparkSession.builder.appName("Chicago Data").getOrCreate()
 
-    df = spark.read.csv(filename, header=True, inferSchema=True)
-    df.cache()
-    df.count()
-    os.remove(filename)
-    df.withColumn("account_number", col("account_number").cast(StringType()))
+    # Read Csvs
+    business_owners = spark.read.csv(owners, header=True, inferSchema=True)
+    business_licenses = spark.read.csv(licenses, header=True, inferSchema=True)
 
-    df1 = spark.read.csv(filename1, header=True, inferSchema=True)
-    df1.cache()
-    df1.count()
-    os.remove(filename1)
-    df1.withColumn("account_number", col("account_number").cast(StringType()))
-    df1.withColumn("application_created_date", to_date(col("application_created_date"), "yyyy-MM-dd"))
+    # Cache Csvs in memory
+    business_owners.cache()
+    business_owners.count()
+    business_licenses.cache()
+    business_licenses.count()
+
+    # Delete Csvs from local Computer
+    os.remove(owners)    
+    os.remove(licenses)
+
+    # Copy DataFrames
+    clean_business_owners = business_owners
+    clean_business_licenses = business_licenses
+
+    # Clean Dataframes
+    clean_business_owners.withColumn("Account Number", F.trim(col("Account Number").cast(StringType())))
+
+    columns = ["Owner Last Name", "Owner First Name", "Owner Middle Initial"]
+    for colm in columns:
+        clean_business_owners.withColumn(colm, F.trim(F.initcap(colm)))
+    
+    clean_business_owners.withColumn("full_name", F.concat(col(columns[0]), F.lit(","), col(columns[1]), F.lit(" "), col(columns[2])).cast(StringType()))
+    clean_business_owners.dropDuplicates()
+    
+
+    clean_business_licenses.withColumn("Account Number", col("Account Number").cast(StringType()))
+    clean_business_licenses.withColumn("APPLICATION CREATED DATE", to_date(col("APPLICATION CREATED DATE"), "yyyy-MM-dd"))
+
 
 if __name__ == "__main__":
     main()
