@@ -214,6 +214,8 @@ def merge_dfs(left: DataFrame, right: DataFrame) -> DataFrame:
         )
     )
 
+    return merged_df
+
 def main():
     load_dotenv()
     url = os.getenv("BUSINESSOWNERSCSVURL")
