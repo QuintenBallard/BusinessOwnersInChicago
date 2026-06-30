@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 from pyspark.sql import DataFrame
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, FloatType
-from pyspark.sql.functions import udf, col, to_date
 import pyspark.sql.functions as F
 import time
 
@@ -89,13 +88,13 @@ def fix_col_names(df: DataFrame) -> DataFrame:
 
 def clean_owner_df(df: DataFrame) -> DataFrame:
     
-    df = df.withColumn("Account Number", F.trim(col("Account Number").cast(StringType())))
+    df = df.withColumn("Account Number", F.trim(F.col("Account Number").cast(StringType())))
 
     columns = ["Owner Last Name", "Owner First Name", "Owner Middle Initial"]
     for colm in columns:
         df = df.withColumn(colm, F.trim(F.initcap(colm)))
     
-    df = df.withColumn("full_name", F.concat(col(columns[0]), F.lit(","), col(columns[1]), F.lit(" "), col(columns[2])).cast(StringType()))
+    df = df.withColumn("full_name", F.concat(F.col(columns[0]), F.lit(","), F.col(columns[1]), F.lit(" "), F.col(columns[2])).cast(StringType()))
     df = trim_all_cols(df)
     df = fix_col_names(df)
 
