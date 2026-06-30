@@ -224,7 +224,7 @@ def main():
 
     spark = SparkSession.builder.appName("Chicago Data").getOrCreate()
 
-    # Read Csvs
+    # Read CSVs
     business_owners = spark.read.csv(owners, header=True, inferSchema=True)
     business_licenses = (
         spark.read
@@ -254,9 +254,14 @@ def main():
     # Merge Datasets
     df = merge_dfs(clean_business_licenses, clean_business_owners)
     
+    df.printSchema()
+    df.show()
+
     # Delete CSVs from local Computer
     os.remove(owners)
     os.remove(licenses)
+
+    spark.stop()
 
 if __name__ == "__main__":
     main()
