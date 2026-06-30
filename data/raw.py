@@ -75,6 +75,147 @@ def fetch_business_license_data() -> list:
         params["$offset"] += params["$limit"]
     return results
 
+def trim_all_cols(df: DataFrame) -> DataFrame:
+    df = df.select([
+        F.trim(F.col(c)).alias(c) if t == "string" else F.col(c) 
+        for c, t in df.dtypes
+    ])
+    return df
+
+def fix_col_names(df: DataFrame) -> DataFrame:
+    df = df.toDF(*[
+        column.strip().lower().replace(" ", "_")
+        for column in df.columns
+    ])
+    return df
+
+def clean_owner_df(df: DataFrame) -> DataFrame:
+    
+    df = df.withColumn("Account Number", F.trim(col("Account Number").cast(StringType())))
+
+    columns = ["Owner Last Name", "Owner First Name", "Owner Middle Initial"]
+    for colm in columns:
+        df = df.withColumn(colm, F.trim(F.initcap(colm)))
+    
+    df = df.withColumn("full_name", F.concat(col(columns[0]), F.lit(","), col(columns[1]), F.lit(" "), col(columns[2])).cast(StringType()))
+    df = trim_all_cols(df)
+    df = fix_col_names(df)
+
+    df = df.dropDuplicates()
+
+    return df
+
+def convert_col_to_date(df: DataFrame, lst: list[str]) -> DataFrame:
+    for column in lst:
+        if column in df.columns:
+            df = df.withColumn(
+                column,
+                F.expr(
+                    f"try_to_date(`{column}`, 'MM/dd/yyyy')"
+                )
+            )
+
+    return df
+
+def convert_col_to_number(df: DataFrame, lst: list[str], lst1: list[str]) -> DataFrame:
+    for column_name in lst:
+        if column_name in df.columns:
+            df = df.withColumn(
+                column_name,
+                F.expr(f"try_cast(`{column_name}` AS INT)")
+            )
+
+    for column_name in lst1:
+        if column_name in df.columns:
+            df = df.withColumn(
+                column_name,
+                F.expr(f"try_cast(`{column_name}` AS DOUBLE)")
+            )
+
+    return df
+
+def clean_license_df(df: DataFrame) -> DataFrame:
+    
+    date_columns = [
+        "application_created_date",
+        "application_requirements_complete",
+        "payment_date",
+        "license_term_start_date",
+        "license_term_expiration_date",
+        "license_approved_for_issuance",
+        "date_issued",
+        "license_status_change_date"
+    ]
+
+    
+    
+    integer_columns = [
+        "license_id",
+        "site_number",
+        "ward",
+        "precinct",
+        "police_district",
+        "community_area",
+        "ssa"
+    ]
+
+    double_columns = [
+        "latitude",
+        "longitude"
+    ]
+
+    df = trim_all_cols(df)
+    df = fix_col_names(df)
+
+    df = convert_col_to_date(df, date_columns)
+    df = convert_col_to_number(df, integer_columns, double_columns)
+
+    df = df.filter(
+        F.col("account_number").isNotNull()
+        & F.col("license_id").isNotNull()
+    )
+
+    df = df.dropDuplicates()
+
+    return df
+
+def merge_dfs(left: DataFrame, right: DataFrame) -> DataFrame:
+    left = left.alias("left")
+    right = right.alias("right")
+
+    join_column = "account_number"
+
+    intersection = set(left.columns) & set(right.columns)
+    left_columns = set(left.columns) - intersection
+    right_columns = set(right.columns) - intersection
+
+    merged_df = (
+        left.join(
+            right,
+            on=join_column,
+            how="left"
+        )
+        .select(
+            F.col(join_column),
+            *[
+                F.coalesce(
+                    F.col(f"left.`{column}`"),
+                    F.col(f"right.`{column}`")
+                ).alias(column)
+                for column in intersection
+                if column != join_column
+            ],
+            *[
+                F.col(f"left.`{column}`").alias(column)
+                for column in left_columns
+            ],
+            *[
+                F.col(f"right.`{column}`").alias(column)
+                for column in right_columns
+            ]
+        )
+    )
+
 def main():
     load_dotenv()
     url = os.getenv("BUSINESSOWNERSCSVURL")
@@ -87,36 +228,37 @@ def main():
 
     # Read Csvs
     business_owners = spark.read.csv(owners, header=True, inferSchema=True)
-    business_licenses = spark.read.csv(licenses, header=True, inferSchema=True)
+    business_licenses = (
+        spark.read
+        .option("header", True)
+        .option("inferSchema", False)
+        .option("mode", "FAILFAST")
+        .option("quote", '"')
+        .option("escape", '"')
+        .option("multiLine", True)
+        .csv(licenses)
+    )
 
     # Cache Csvs in memory
     business_owners.cache()
     business_owners.count()
     business_licenses.cache()
     business_licenses.count()
-
-    # Delete Csvs from local Computer
-    os.remove(owners)    
-    os.remove(licenses)
-
+    
     # Copy DataFrames
     clean_business_owners = business_owners
     clean_business_licenses = business_licenses
-
-    # Clean Dataframes
-    clean_business_owners.withColumn("Account Number", F.trim(col("Account Number").cast(StringType())))
-
-    columns = ["Owner Last Name", "Owner First Name", "Owner Middle Initial"]
-    for colm in columns:
-        clean_business_owners.withColumn(colm, F.trim(F.initcap(colm)))
     
-    clean_business_owners.withColumn("full_name", F.concat(col(columns[0]), F.lit(","), col(columns[1]), F.lit(" "), col(columns[2])).cast(StringType()))
-    clean_business_owners.dropDuplicates()
+    # Clean Data
+    clean_business_owners = clean_owner_df(clean_business_owners)
+    clean_business_licenses = clean_license_df(clean_business_licenses)
+
+    # Merge Datasets
+    df = merge_dfs(clean_business_licenses, clean_business_owners)
     
-
-    clean_business_licenses.withColumn("Account Number", col("Account Number").cast(StringType()))
-    clean_business_licenses.withColumn("APPLICATION CREATED DATE", to_date(col("APPLICATION CREATED DATE"), "yyyy-MM-dd"))
-
+    # Delete CSVs from local Computer
+    os.remove(owners)
+    os.remove(licenses)
 
 if __name__ == "__main__":
     main()
