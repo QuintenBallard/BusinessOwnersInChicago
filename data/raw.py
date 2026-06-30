@@ -252,7 +252,14 @@ def main():
     owners = download_csv(url, "business_owners.csv")
     licenses = download_csv(url1, "business_licenses.csv")
 
-    spark = SparkSession.builder.appName("Chicago Data").getOrCreate()
+    spark = (
+        SparkSession.builder
+        .appName("BusinessOwnersInChicago")
+        .master("local[4]")
+        .config("spark.sql.shuffle.partitions", "8")
+        .config("spark.ui.showConsoleProgress", "false")
+        .getOrCreate()
+    )
 
     # Read CSVs
     business_owners = spark.read.csv(owners, header=True, inferSchema=True)
@@ -282,12 +289,14 @@ def main():
     clean_business_licenses = clean_license_df(clean_business_licenses)
 
     # Merge Datasets
-    df = merge_dfs(clean_business_licenses, clean_business_owners)
-    
-    # Show Schema
-    clean_business_owners.printSchema()
-    clean_business_licenses.printSchema()
-    df.printSchema()
+    merged_df = merge_dfs(clean_business_licenses, clean_business_owners)
+
+    # Save parquets
+    business_owners.write.mode("overwrite").option("compression", "snappy").parquet("parquet/original_business_owners")
+    business_licenses.write.mode("overwrite").option("compression", "snappy").parquet("parquet/original_business_licenses")
+    clean_business_owners.write.mode("overwrite").option("compression", "snappy").parquet("parquet/business_owners")
+    clean_business_licenses.write.mode("overwrite").option("compression", "snappy").parquet("parquet/business_licenses")
+    merged_df.write.mode("overwrite").option("compression", "snappy").parquet("parquet/business_license_owners")
 
     # Delete CSVs from local Computer
     os.remove(owners)
