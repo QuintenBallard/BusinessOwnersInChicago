@@ -7,17 +7,46 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 import pyspark.sql.functions as F
 import time
 
-def download_csv(url: str, filename: str) -> str:
+def download_csv(url: str, filename: str, retries: int = 3) -> str:
+    temp_file = filename + ".part"
 
-    print("Downloading", filename)
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open(filename, "wb") as f:
-            f.write(response.content)
-        print(f"Downloaded {filename} successfully.")
-    else:
-        print(f"Failed to download {filename}. Status code: {response.status_code}")
-    return filename
+    for attempt in range(1, retries + 1):
+        try:
+            print(f"Downloading {filename} — attempt {attempt}/{retries}")
+
+            with requests.get(
+                url,
+                stream=True,
+                timeout=(15, 600)
+            ) as response:
+                response.raise_for_status()
+
+                with open(temp_file, "wb") as file:
+                    for chunk in response.iter_content(
+                        chunk_size=8 * 1024 * 1024
+                    ):
+                        if chunk:
+                            file.write(chunk)
+
+            os.replace(temp_file, filename)
+
+            print(f"Downloaded {filename} successfully.")
+            return filename
+
+        except requests.exceptions.RequestException as error:
+            print(f"Download failed: {error}")
+
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+
+            if attempt < retries:
+                print("Retrying in 5 seconds...")
+                time.sleep(5)
+            else:
+                raise RuntimeError(
+                    f"Could not download {filename} "
+                    f"after {retries} attempts."
+                ) from error
 
 def fetch_business_owner_data() -> list:
     """
@@ -255,8 +284,10 @@ def main():
     # Merge Datasets
     df = merge_dfs(clean_business_licenses, clean_business_owners)
     
+    # Show Schema
+    clean_business_owners.printSchema()
+    clean_business_licenses.printSchema()
     df.printSchema()
-    df.show()
 
     # Delete CSVs from local Computer
     os.remove(owners)
