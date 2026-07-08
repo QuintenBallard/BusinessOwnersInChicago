@@ -257,7 +257,6 @@ def main():
         .appName("BusinessOwnersInChicago")
         .master("local[4]")
         .config("spark.sql.shuffle.partitions", "8")
-        .config("spark.ui.showConsoleProgress", "false")
         .getOrCreate()
     )
 
