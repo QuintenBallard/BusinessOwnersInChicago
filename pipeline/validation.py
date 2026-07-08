@@ -19,10 +19,7 @@ REQUIRED_COLUMNS = {
 }
 
 
-def validate_folder_exists(
-    dataset_name: str,
-    parquet_path: str,
-) -> None:
+def validate_folder_exists(dataset_name: str, parquet_path: str) -> None:
     """
     Confirm that a Parquet output directory exists.
 
@@ -50,10 +47,7 @@ def validate_folder_exists(
         )
 
 
-def validate_dataframe_not_empty(
-    dataset_name: str,
-    df: DataFrame,
-) -> None:
+def validate_dataframe_not_empty(dataset_name: str, df: DataFrame) -> None:
     """
     Confirm that a DataFrame contains at least one row.
 
@@ -76,10 +70,7 @@ def validate_dataframe_not_empty(
         )
 
 
-def validate_required_columns(
-    dataset_name: str,
-    df: DataFrame,
-) -> None:
+def validate_required_columns(dataset_name: str, df: DataFrame) -> None:
     """
     Confirm that all required columns exist.
 
@@ -112,11 +103,7 @@ def validate_required_columns(
         )
 
 
-def validate_no_null_values(
-    dataset_name: str,
-    df: DataFrame,
-    column_names: list[str],
-) -> None:
+def validate_no_null_values(dataset_name: str, df: DataFrame, column_names: list[str]) -> None:
     """
     Confirm that important columns do not contain null values.
 
@@ -158,9 +145,7 @@ def validate_no_null_values(
             )
 
 
-def validate_cleaned_datasets(
-    loaded_datasets: dict[str, DataFrame],
-) -> None:
+def validate_cleaned_datasets(loaded_datasets: dict[str, DataFrame]) -> None:
     """
     Apply validation rules specific to the cleaned and merged datasets.
 
@@ -177,8 +162,6 @@ def validate_cleaned_datasets(
         "business_license_owners"
     ]
 
-    # clean_license_df() filters these fields, so the Parquet
-    # output should not contain nulls in either column.
     validate_no_null_values(
         dataset_name="business_licenses",
         df=business_licenses,
@@ -188,8 +171,6 @@ def validate_cleaned_datasets(
         ],
     )
 
-    # The merged dataset uses cleaned licenses as the left side
-    # of the join, so these fields should also remain non-null.
     validate_no_null_values(
         dataset_name="business_license_owners",
         df=merged_data,
@@ -200,9 +181,7 @@ def validate_cleaned_datasets(
     )
 
 
-def validate_parquet_outputs(
-    parquet_paths: dict[str, str] | None = None,
-) -> dict[str, object]:
+def validate_parquet_outputs(parquet_paths: dict[str, str] | None = None) -> dict[str, object]:
     """
     Validate all Parquet outputs produced by the pipeline.
 

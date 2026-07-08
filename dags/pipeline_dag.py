@@ -3,10 +3,7 @@ import pendulum
 from airflow.sdk import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 
-from pipeline.download_csvs import (
-    download_business_owners,
-    download_business_licenses,
-)
+from pipeline.download_csvs import download_business_owners, download_business_licenses
 from pipeline.transform import transform_and_write_parquet
 from pipeline.validation import validate_parquet_outputs
 from pipeline.clean_up import delete_downloaded_csvs

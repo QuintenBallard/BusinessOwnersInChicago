@@ -26,7 +26,6 @@ def delete_downloaded_csvs(owners_csv: str, licenses_csv: str) -> dict[str, obje
     deleted_files = []
 
     for csv_file in csv_files:
-        # Delete the completed CSV file.
         if os.path.exists(csv_file):
             os.remove(csv_file)
             deleted_files.append(csv_file)
@@ -34,7 +33,6 @@ def delete_downloaded_csvs(owners_csv: str, licenses_csv: str) -> dict[str, obje
         else:
             print(f"CSV does not exist: {csv_file}")
 
-        # Delete any leftover partial download file.
         partial_file = csv_file + ".part"
 
         if os.path.exists(partial_file):
