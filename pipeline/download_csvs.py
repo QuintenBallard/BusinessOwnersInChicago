@@ -52,7 +52,10 @@ def download_csv(url: str, filename: str, retries: int = 3) -> str:
             print(f"Downloaded {filename} successfully.")
             return filename
 
-        except requests.exceptions.RequestException as error:
+        except (
+            requests.exceptions.RequestException,
+            OSError,
+        ) as error:
             print(f"Download failed: {error}")
 
             if os.path.exists(temp_file):

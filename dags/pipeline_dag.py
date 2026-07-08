@@ -2,12 +2,19 @@ import pendulum
 
 from airflow.sdk import DAG
 from airflow.providers.standard.operators.python import PythonOperator
+from datetime import datetime, timedelta
 
 from pipeline.download_csvs import download_business_owners, download_business_licenses
 from pipeline.transform import transform_and_write_parquet
 from pipeline.validation import validate_parquet_outputs
 from pipeline.clean_up import delete_downloaded_csvs
 
+default_args = {
+    "owner": "airflow",
+    "depends_on_past": False,
+    "retries": 3,
+    "retry_delay": timedelta(minutes=1),
+}
 
 with DAG(
     dag_id="pipeline_dag",
@@ -15,11 +22,12 @@ with DAG(
     start_date=pendulum.datetime(
         2026,
         7,
-        7,
+        1,
         tz="America/New_York",
     ),
     catchup=False,
     max_active_runs=1,
+    default_args=default_args,
 ) as dag:
 
     download_owners_task = PythonOperator(
